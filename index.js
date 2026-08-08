@@ -49,11 +49,11 @@ client.on('voiceStateUpdate', (oldState, newState) => {
 
     // เข้าห้องว้อยส์
     if (!oldState.channelId && newState.channelId) {
-        logChannel.send(`${timeDateStr} <@${member.id}> เข้าดิสVC **${newState.channel.name}**`);
+        logChannel.send(`${timeDateStr} <@${member.id}> เข้าVC **${newState.channel.name}**`);
     }
     // ออกจากห้องว้อยส์
     else if (oldState.channelId && !newState.channelId) {
-        logChannel.send(`${timeDateStr} <@${member.id}> ออกจากดิสห้องว้อยส์ **${oldState.channel.name}**`);
+        logChannel.send(`${timeDateStr} <@${member.id}> ออกจากVC **${oldState.channel.name}**`);
     }
     // ย้ายห้องว้อยส์
     else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
