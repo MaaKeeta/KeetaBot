@@ -53,7 +53,7 @@ client.on('voiceStateUpdate', (oldState, newState) => {
     }
     // ออกจากห้องว้อยส์
     else if (oldState.channelId && !newState.channelId) {
-        logChannel.send(`${timeDateStr} <@${member.id}> ออกจากVC **${oldState.channel.name}**`);
+        logChannel.send(`${timeDateStr} <@${member.id}> ออกจากVCCC **${oldState.channel.name}**`);
     }
     // ย้ายห้องว้อยส์
     else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
