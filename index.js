@@ -1,4 +1,12 @@
+// === โค้ดสำหรับรันบน Render.com (ระบบ Log 24 ชม. แบบเต็มสูบ) ===
 const { Client, GatewayIntentBits } = require('discord.js');
+const express = require('express');
+
+// 📌 ระบบจำลอง Web Server เพื่อให้ Render.com รันผ่าน ไม่เออเร่อ Port
+const app = express();
+const PORT = process.env.PORT || 3000;
+app.get('/', (req, res) => res.send('ระบบเก็บ Log 24 ชั่วโมงกำลังทำงาน!'));
+app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
 
 const client = new Client({
     intents: [
@@ -61,7 +69,7 @@ client.on('voiceStateUpdate', (oldState, newState) => {
 
     // ตรวจจับการสตรีมหน้าจอ (Stream)
     if (!oldState.streaming && newState.streaming) {
-        logChannel.send(`${timeDateStr} screen <@${member.id}> เริ่ม **สตรีมหน้าจอ** ในห้อง **${newState.channel.name}**`);
+        logChannel.send(`${timeDateStr} 💻 <@${member.id}> เริ่ม **สตรีมหน้าจอ** ในห้อง **${newState.channel.name}**`);
     } else if (oldState.streaming && !newState.streaming) {
         logChannel.send(`${timeDateStr} 🛑 <@${member.id}> หยุดสตรีมหน้าจอในห้อง **${newState.channel.name}**`);
     }
@@ -100,9 +108,9 @@ client.on('messageDelete', async (message) => {
     }
 });
 
-client.once('ready', () => {
-    console.log(`บอท ${client.user.tag} ออนไลน์พร้อมใช้งานฟีเจอร์จัดเต็มแล้ว!`);
+client.once('clientReady', () => {
+    console.log(`🤖 บอท ${client.user.tag} ออนไลน์พร้อมระบบเก็บ Log 24 ชม.! (Render)`);
 });
 
-// ดึง Bot Token จากระบบตัวแปรลับ
+// ดึง Bot Token จากระบบตัวแปรลับ หรือใส่ Token ตรงๆ ไว้ก็ได้ครับ
 client.login(process.env.DISCORD_TOKEN);
