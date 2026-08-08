@@ -3,48 +3,106 @@ const { Client, GatewayIntentBits } = require('discord.js');
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildVoiceStates
+        GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
     ]
 });
 
-// ดึง ID ห้องข้อความจากระบบตัวแปรลับของ Railway (หรือค่าสำรอง)
+// ดึง ID ห้องข้อความจากระบบตัวแปรลับ (หรือค่าสำรอง)
 const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID || '1535687188048511036';
 
-client.on('voiceStateUpdate', (oldState, newState) => {
-    const logChannel = newState.guild.channels.cache.get(LOG_CHANNEL_ID);
-    if (!logChannel) return;
-
-    const member = newState.member;
+// ฟังก์ชันสำหรับจัดรูปแบบ วันที่/เวลา เป็น พ.ศ.
+function getDateTimeStr() {
     const now = new Date();
-
-    // จัดฟอร์แมตเวลา (เช่น 19.50)
     const hours = now.getHours().toString().padStart(2, '0');
     const minutes = now.getMinutes().toString().padStart(2, '0');
     const timeStr = `${hours}.${minutes}`;
 
-    // จัดฟอร์แมตวันที่ พ.ศ. (เช่น 8/8/2569)
     const day = now.getDate();
     const month = now.getMonth() + 1;
     const yearBE = now.getFullYear() + 543;
     const dateStr = `${day}/${month}/${yearBE}`;
 
-    // 1. กรณีเข้าห้องว้อยส์
+    return `${timeStr} ${dateStr}`;
+}
+
+// ==========================================
+// 1. ระบบ Voice, Stream, Camera Log
+// ==========================================
+client.on('voiceStateUpdate', (oldState, newState) => {
+    const logChannel = newState.guild.channels.cache.get(LOG_CHANNEL_ID);
+    if (!logChannel) return;
+
+    const member = newState.member;
+    if (member.user.bot) return; // กรองบอทออก
+
+    const timeDateStr = getDateTimeStr();
+
+    // เข้าห้องว้อยส์
     if (!oldState.channelId && newState.channelId) {
-        logChannel.send(`${timeStr} ${dateStr} <@${member.id}> เข้าดิสห้อง **${newState.channel.name}**`);
+        logChannel.send(`${timeDateStr} <@${member.id}> เข้าดิสห้องว้อยส์ **${newState.channel.name}**`);
     }
-    // 2. กรณีออกจากห้องว้อยส์
+    // ออกจากห้องว้อยส์
     else if (oldState.channelId && !newState.channelId) {
-        logChannel.send(`${timeStr} ${dateStr} <@${member.id}> ออกจากดิสห้อง **${oldState.channel.name}**`);
+        logChannel.send(`${timeDateStr} <@${member.id}> ออกจากดิสห้องว้อยส์ **${oldState.channel.name}**`);
     }
-    // 3. กรณีย้ายห้องว้อยส์
+    // ย้ายห้องว้อยส์
     else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
-        logChannel.send(`${timeStr} ${dateStr} <@${member.id}> ย้ายจากห้อง **${oldState.channel.name}** ไปยังห้อง **${newState.channel.name}**`);
+        logChannel.send(`${timeDateStr} <@${member.id}> ย้ายห้องจาก **${oldState.channel.name}** ไปยัง **${newState.channel.name}**`);
+    }
+
+    // ตรวจจับการเปิดกล้อง (Camera)
+    if (!oldState.selfVideo && newState.selfVideo) {
+        logChannel.send(`${timeDateStr} 📹 <@${member.id}> เริ่ม **เปิดกล้อง** ในห้อง **${newState.channel.name}**`);
+    } else if (oldState.selfVideo && !newState.selfVideo) {
+        logChannel.send(`${timeDateStr} 📴 <@${member.id}> ปิดกล้องในห้อง **${newState.channel.name}**`);
+    }
+
+    // ตรวจจับการสตรีมหน้าจอ (Stream)
+    if (!oldState.streaming && newState.streaming) {
+        logChannel.send(`${timeDateStr} screen <@${member.id}> เริ่ม **สตรีมหน้าจอ** ในห้อง **${newState.channel.name}**`);
+    } else if (oldState.streaming && !newState.streaming) {
+        logChannel.send(`${timeDateStr} 🛑 <@${member.id}> หยุดสตรีมหน้าจอในห้อง **${newState.channel.name}**`);
+    }
+});
+
+// ==========================================
+// 2. ระบบ Log ข้อความที่ถูกลบ (รูป, คลิป, ลิงก์, ข้อความ)
+// ==========================================
+client.on('messageDelete', async (message) => {
+    if (!message.guild) return;
+    if (message.author && message.author.bot) return; // กรองบอทออก
+
+    const logChannel = message.guild.channels.cache.get(LOG_CHANNEL_ID);
+    if (!logChannel) return;
+
+    const timeDateStr = getDateTimeStr();
+    const authorTag = message.author ? `<@${message.author.id}>` : 'ไม่ทราบผู้ใช้';
+
+    let contentLog = `🗑️ **[ข้อความถูกลบ]** ${timeDateStr}\n👤 ผู้ส่ง: ${authorTag} | ส่งที่ช่อง: <#${message.channel.id}>`;
+
+    // ถ้ามีข้อความตัวอักษรหรือลิงก์
+    if (message.content) {
+        contentLog += `\n💬 ข้อความที่ลบ: "${message.content}"`;
+    }
+
+    // ส่งข้อความแจ้งเตือนหลักก่อน
+    await logChannel.send(contentLog);
+
+    // ถ้ามีรูปภาพหรือไฟล์แนบ (คลิป/รูป) ให้ส่งลิงก์ไฟล์แนบตามไปด้วยเป็นหลักฐาน
+    if (message.attachments.size > 0) {
+        let attachmentUrls = [];
+        message.attachments.forEach(attachment => {
+            attachmentUrls.push(attachment.url);
+        });
+        await logChannel.send(`📎 **ไฟล์/รูปภาพที่แนบมาด้วย:**\n${attachmentUrls.join('\n')}`);
     }
 });
 
 client.once('ready', () => {
-    console.log(`บอท ${client.user.tag} ออนไลน์พร้อมใช้งานแล้ว!`);
+    console.log(`บอท ${client.user.tag} ออนไลน์พร้อมใช้งานฟีเจอร์จัดเต็มแล้ว!`);
 });
 
-// ดึง Bot Token จากระบบตัวแปรลับของ Railway
+// ดึง Bot Token จากระบบตัวแปรลับ
 client.login(process.env.DISCORD_TOKEN);
