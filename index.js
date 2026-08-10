@@ -1,5 +1,5 @@
 // === โค้ดสำหรับรันบน Render.com (ระบบ Log 24 ชม. แบบเต็มสูบ) ===
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, AuditLogEvent } = require('discord.js'); // แก้ไข rฤequire แล้ว และเพิ่ม AuditLogEvent
 const express = require('express');
 
 // 📌 ระบบจำลอง Web Server เพื่อให้ Render.com รันผ่าน ไม่เออเร่อ Port
@@ -73,7 +73,7 @@ client.on('voiceStateUpdate', (oldState, newState) => {
 });
 
 // ==========================================
-// 2. ระบบ Log ข้อความที่ถูกลบ (รูป, คลิป, ลิงก์, ข้อความ)
+// 2. ระบบ Log ข้อความที่ถูกลบ (พร้อมสืบหาคนลบ)
 // ==========================================
 client.on('messageDelete', async (message) => {
     if (!message.guild) return;
@@ -84,18 +84,37 @@ client.on('messageDelete', async (message) => {
 
     const dateStr = getDateStr();
     const authorTag = message.author ? `<@${message.author.id}>` : 'ไม่ทราบผู้ใช้';
+    
+    let executorTag = "ผู้ใช้ลบเอง (หรือบอทลบให้)";
 
-    let contentLog = `🗑️ **[ข้อความถูกลบ]** ${dateStr}\n👤 ผู้ส่ง: ${authorTag} | ส่งที่ช่อง: <#${message.channel.id}>`;
+    try {
+        // เช็กประวัติว่ามีแอดมินคนไหนกดลบข้อความไหม
+        const fetchedLogs = await message.guild.fetchAuditLogs({
+            limit: 1,
+            type: AuditLogEvent.MessageDelete,
+        });
+        
+        const deletionLog = fetchedLogs.entries.first();
 
-    // ถ้ามีข้อความตัวอักษรหรือลิงก์
+        // ถ้าเจอประวัติการลบภายใน 5 วินาทีล่าสุด
+        if (deletionLog) {
+            const { executor, target, createdTimestamp } = deletionLog;
+            if (target.id === message.author.id && createdTimestamp > (Date.now() - 5000)) {
+                executorTag = `<@${executor.id}>`; 
+            }
+        }
+    } catch (error) {
+        console.log("บอทอ่าน Audit Log ไม่ได้ (อาจจะลืมให้ยศบอท)");
+    }
+
+    let contentLog = `🗑️ **[ข้อความถูกลบ]** ${dateStr}\n📝 **ผู้ส่ง:** ${authorTag}\n🕵️ **คนลบ:** ${executorTag} | ช่อง: <#${message.channel.id}>`;
+
     if (message.content) {
         contentLog += `\n💬 ข้อความที่ลบ: "${message.content}"`;
     }
 
-    // ส่งข้อความแจ้งเตือนหลักก่อน
     await logChannel.send(contentLog);
 
-    // ถ้ามีรูปภาพหรือไฟล์แนบ (คลิป/รูป) ให้ส่งลิงก์ไฟล์แนบตามไปด้วยเป็นหลักฐาน
     if (message.attachments.size > 0) {
         let attachmentUrls = [];
         message.attachments.forEach(attachment => {
@@ -105,9 +124,47 @@ client.on('messageDelete', async (message) => {
     }
 });
 
+// ==========================================
+// 3. ระบบตอบกลับคำศัพท์เฉพาะ (Auto-reply)
+// ==========================================
+client.on('messageCreate', (message) => {
+    if (message.author.bot) return; // กรองบอทออก
+
+    const content = message.content;
+    const greetings = ['สวัสดีครับ', 'สวัสดีค่ะ', 'ดีครับ', 'ดีค่ะ', 'ดีจ้า', 'สวัสดีจ้า'];
+
+    if (greetings.some(word => content.includes(word))) {
+        return message.reply('โฮ่ง!');
+    }
+
+    // เรียงลำดับเงื่อนไขเพื่อไม่ให้บอทสับสน
+    if (content.includes('คิดถึงหมาคีตะ') || content.includes('คืดถึงหมาคีตะ')) {
+        return message.reply('แห่ะๆ');
+    } else if (content.includes('คิดถึงคีตะ')) {
+        return message.reply('คิดถึงเหมือนกันครับนะ');
+    } else if (content.includes('หมาคีตะ')) {
+        return message.reply('บ๊อกๆ');
+    }
+});
+
+// ==========================================
+// 4. ระบบจับคน "แอบแก้ไขข้อความ"
+// ==========================================
+client.on('messageUpdate', (oldMessage, newMessage) => {
+    if (newMessage.author?.bot) return; // กรองบอทออก
+    if (!oldMessage.content) return; // ข้ามถ้าไม่มีข้อความเก่าในระบบ
+
+    // ถ้าข้อความมีการเปลี่ยนแปลงจริงๆ
+    if (oldMessage.content !== newMessage.content) {
+        newMessage.reply({
+            content: `👀 จับได้นะว่าแอบแก้ข้อความ!\n**📝 ข้อความเดิม:** ${oldMessage.content}\n**✨ แก้เป็น:** ${newMessage.content}`
+        });
+    }
+});
+
 // ใช้ 'ready' (แก้ไขจาก 'clientReady' ให้ตรงตามมาตรฐาน discord.js)
 client.once('ready', () => {
-    console.log(`🤖 บอท ${client.user.tag} ออนไลน์พร้อมระบบเก็บ Log 24 ชม.! (Render)`);
+    console.log(`🤖 บอท ${client.user.tag} ออนไลน์พร้อมฟีเจอร์ใหม่เพียบ! (Render)`);
 });
 
 // ดึง Bot Token จากระบบตัวแปรลับ
