@@ -1,5 +1,5 @@
 // === โค้ดสำหรับรันบน Render.com (ระบบ Log 24 ชม. แบบเต็มสูบ) ===
-const { Client, GatewayIntentBits, AuditLogEvent } = require('discord.js'); // แก้ไข rฤequire แล้ว และเพิ่ม AuditLogEvent
+const { Client, GatewayIntentBits, AuditLogEvent } = require('discord.js');
 const express = require('express');
 
 // 📌 ระบบจำลอง Web Server เพื่อให้ Render.com รันผ่าน ไม่เออเร่อ Port
@@ -107,7 +107,7 @@ client.on('messageDelete', async (message) => {
         console.log("บอทอ่าน Audit Log ไม่ได้ (อาจจะลืมให้ยศบอท)");
     }
 
-    let contentLog = `🗑️ **[ข้อความถูกลบ]** ${dateStr}\n📝 **ผู้ส่ง:** ${authorTag}\n🕵️ **คนลบ:** ${executorTag} | ช่อง: <#${message.channel.id}>`;
+    let contentLog = `🗑️ **[ข้อความถูกลบ]** ${dateStr}\n📝 **ผู้ส่ง:** ${authorTag}\n🕵️ **คนลบ:** ${executorTag} | **ช่อง:** <#${message.channel.id}>`;
 
     if (message.content) {
         contentLog += `\n💬 ข้อความที่ลบ: "${message.content}"`;
@@ -141,24 +141,33 @@ client.on('messageCreate', (message) => {
     if (content.includes('คิดถึงหมาคีตะ') || content.includes('คืดถึงหมาคีตะ')) {
         return message.reply('แห่ะๆ');
     } else if (content.includes('คิดถึงคีตะ')) {
-        return message.reply('คิดถึงเหมือนกันครับนะ');
+        return message.reply('คิดถึงเหมือนกันครับ');
     } else if (content.includes('หมาคีตะ')) {
         return message.reply('บ๊อกๆ');
     }
 });
 
 // ==========================================
-// 4. ระบบจับคน "แอบแก้ไขข้อความ"
+// 4. ระบบ Log ข้อความที่ถูกแก้ไข (ส่งเข้าห้อง Log)
 // ==========================================
 client.on('messageUpdate', (oldMessage, newMessage) => {
-    if (newMessage.author?.bot) return; // กรองบอทออก
-    if (!oldMessage.content) return; // ข้ามถ้าไม่มีข้อความเก่าในระบบ
+    if (!newMessage.guild) return;
+    if (newMessage.author && newMessage.author.bot) return; // กรองบอทออก
+    
+    // ข้ามถ้าไม่มีข้อความเก่าในระบบ หรือข้อความไม่มีอะไรเลย
+    if (!oldMessage.content || !newMessage.content) return; 
 
     // ถ้าข้อความมีการเปลี่ยนแปลงจริงๆ
     if (oldMessage.content !== newMessage.content) {
-        newMessage.reply({
-            content: `👀 จับได้นะว่าแอบแก้ข้อความ!\n**📝 ข้อความเดิม:** ${oldMessage.content}\n**✨ แก้เป็น:** ${newMessage.content}`
-        });
+        const logChannel = newMessage.guild.channels.cache.get(LOG_CHANNEL_ID);
+        if (!logChannel) return;
+
+        const dateStr = getDateStr();
+        const authorTag = `<@${newMessage.author.id}>`;
+
+        const editLog = `✏️ **[ข้อความถูกแก้ไข]** ${dateStr}\n👤 **ผู้ส่ง:** ${authorTag} | **ช่อง:** <#${newMessage.channel.id}>\n🔴 **ข้อความเดิม:** "${oldMessage.content}"\n🟢 **แก้เป็น:** "${newMessage.content}"`;
+
+        logChannel.send(editLog);
     }
 });
 
