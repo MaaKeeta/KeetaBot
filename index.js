@@ -1,5 +1,5 @@
-// === โค้ดสำหรับรันบน Render.com (ระบบ Log 24 ชม. แบบเต็มสูบ) ===
-const { Client, GatewayIntentBits, AuditLogEvent } = require('discord.js');
+// === โค้ดสำหรับรันบน Render.com (ระบบ Log 24 ชม. + สุ่มสถานะ) ===
+const { Client, GatewayIntentBits, AuditLogEvent, ActivityType } = require('discord.js'); // เพิ่ม ActivityType
 const express = require('express');
 
 // 📌 ระบบจำลอง Web Server เพื่อให้ Render.com รันผ่าน ไม่เออเร่อ Port
@@ -171,9 +171,44 @@ client.on('messageUpdate', (oldMessage, newMessage) => {
     }
 });
 
-// ใช้ 'ready' (แก้ไขจาก 'clientReady' ให้ตรงตามมาตรฐาน discord.js)
+// ==========================================
+// 5. ระบบสุ่มสเตตัส/สถานะบอท (Status Rotation)
+// ==========================================
+// รวมรายการประโยคที่ต้องการให้สุ่มโชว์ (สามารถเพิ่ม/ลบประโยคในนี้ได้เลย)
+const statusList = [
+    { name: 'หมาที่ส่องโปรไฟล์', type: ActivityType.Watching },
+    { name: 'คนคุยกันในเซิร์ฟเวอร์', type: ActivityType.Watching },
+    { name: 'วิ่งไล่จับหางตัวเอง', type: ActivityType.Playing },
+    { name: 'เสียงหัวใจคีตะ', type: ActivityType.Listening },
+    { name: 'วันนี้ฉันได้เรียนรู้...', type: ActivityType.Custom }
+];
+
+function setRandomStatus() {
+    if (!client.user) return;
+    
+    // สุ่มหยิบประโยคจาก statusList
+    const randomStatus = statusList[Math.floor(Math.random() * statusList.length)];
+    
+    client.user.setPresence({
+        activities: [randomStatus],
+        status: 'online', // สถานะไฟเขียว (online, idle, dnd)
+    });
+
+    console.log(`🎭 เปลี่ยนสถานะบอทเป็น: ${randomStatus.name}`);
+}
+
+// ใช้ 'ready' (เมื่อบอทล็อกอินสำเร็จ)
 client.once('ready', () => {
     console.log(`🤖 บอท ${client.user.tag} ออนไลน์พร้อมฟีเจอร์ใหม่เพียบ! (Render)`);
+    
+    // 1. ทำการสุ่มสเตตัสทันทีที่บอทเริ่มทำงาน
+    setRandomStatus();
+
+    // 2. ตั้งเวลาสุ่มเปลี่ยนสเตตัสอัตโนมัติ 
+    // ตัวอย่าง: 24 * 60 * 60 * 1000 = สุ่มใหม่ทุกๆ 1 วัน (86,400,000 มิลลิวินาที)
+    // หากต้องการให้สุ่มทุก 1 ชั่วโมง ให้เปลี่ยนเป็น (60 * 60 * 1000)
+    const ONE_DAY_MS = 24 * 60 * 60 * 10000;
+    setInterval(setRandomStatus, ONE_DAY_MS);
 });
 
 // ดึง Bot Token จากระบบตัวแปรลับ
