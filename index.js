@@ -20,19 +20,16 @@ const client = new Client({
 // ดึง ID ห้องข้อความจากระบบตัวแปรลับ (หรือค่าสำรอง)
 const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID || '1535687188048511036';
 
-// ฟังก์ชันสำหรับจัดรูปแบบ วันที่/เวลา เป็น พ.ศ.
-function getDateTimeStr() {
-    const now = new Date();
-    const hours = now.getHours().toString().padStart(2, '0');
-    const minutes = now.getMinutes().toString().padStart(2, '0');
-    const timeStr = `${hours}.${minutes}`;
+// ฟังก์ชันสำหรับจัดรูปแบบ วันที่ เป็น พ.ศ. (บังคับโซนเวลาไทย ป้องกันวันที่เพี้ยนตอนหลังเที่ยงคืน)
+function getDateStr() {
+    const optionsDate = { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'numeric', year: 'numeric' };
+    const dateString = new Intl.DateTimeFormat('en-GB', optionsDate).format(new Date()); 
+    
+    // จะได้รูปแบบ DD/MM/YYYY
+    const [day, month, yearCE] = dateString.split('/');
+    const yearBE = parseInt(yearCE) + 543;
 
-    const day = now.getDate();
-    const month = now.getMonth() + 1;
-    const yearBE = now.getFullYear() + 543;
-    const dateStr = `${day}/${month}/${yearBE}`;
-
-    return `${timeStr} ${dateStr}`;
+    return `${day}/${month}/${yearBE}`;
 }
 
 // ==========================================
@@ -45,33 +42,33 @@ client.on('voiceStateUpdate', (oldState, newState) => {
     const member = newState.member;
     if (member.user.bot) return; // กรองบอทออก
 
-    const timeDateStr = getDateTimeStr();
+    const dateStr = getDateStr();
 
     // เข้าห้องว้อยส์
     if (!oldState.channelId && newState.channelId) {
-        logChannel.send(`${timeDateStr} <@${member.id}> เข้าVC **${newState.channel.name}**`);
+        logChannel.send(`${dateStr} <@${member.id}> เข้าVC **${newState.channel.name}**`);
     }
     // ออกจากห้องว้อยส์
     else if (oldState.channelId && !newState.channelId) {
-        logChannel.send(`${timeDateStr} <@${member.id}> ออกจากVC **${oldState.channel.name}**`);
+        logChannel.send(`${dateStr} <@${member.id}> ออกจากVC **${oldState.channel.name}**`);
     }
     // ย้ายห้องว้อยส์
     else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
-        logChannel.send(`${timeDateStr} <@${member.id}> ย้ายห้องจาก **${oldState.channel.name}** ไปยัง **${newState.channel.name}**`);
+        logChannel.send(`${dateStr} <@${member.id}> ย้ายห้องจาก **${oldState.channel.name}** ไปยัง **${newState.channel.name}**`);
     }
 
     // ตรวจจับการเปิดกล้อง (Camera)
     if (!oldState.selfVideo && newState.selfVideo) {
-        logChannel.send(`${timeDateStr} 📹 <@${member.id}> เริ่ม **เปิดกล้อง** ในห้อง **${newState.channel.name}**`);
+        logChannel.send(`${dateStr} 📹 <@${member.id}> เริ่ม **เปิดกล้อง** ในห้อง **${newState.channel.name}**`);
     } else if (oldState.selfVideo && !newState.selfVideo) {
-        logChannel.send(`${timeDateStr} 📴 <@${member.id}> ปิดกล้องในห้อง **${newState.channel.name}**`);
+        logChannel.send(`${dateStr} 📴 <@${member.id}> ปิดกล้องในห้อง **${newState.channel.name}**`);
     }
 
     // ตรวจจับการสตรีมหน้าจอ (Stream)
     if (!oldState.streaming && newState.streaming) {
-        logChannel.send(`${timeDateStr} 💻 <@${member.id}> เริ่ม **สตรีมหน้าจอ** ในห้อง **${newState.channel.name}**`);
+        logChannel.send(`${dateStr} 💻 <@${member.id}> เริ่ม **สตรีมหน้าจอ** ในห้อง **${newState.channel.name}**`);
     } else if (oldState.streaming && !newState.streaming) {
-        logChannel.send(`${timeDateStr} 🛑 <@${member.id}> หยุดสตรีมหน้าจอในห้อง **${newState.channel.name}**`);
+        logChannel.send(`${dateStr} 🛑 <@${member.id}> หยุดสตรีมหน้าจอในห้อง **${newState.channel.name}**`);
     }
 });
 
@@ -85,10 +82,10 @@ client.on('messageDelete', async (message) => {
     const logChannel = message.guild.channels.cache.get(LOG_CHANNEL_ID);
     if (!logChannel) return;
 
-    const timeDateStr = getDateTimeStr();
+    const dateStr = getDateStr();
     const authorTag = message.author ? `<@${message.author.id}>` : 'ไม่ทราบผู้ใช้';
 
-    let contentLog = `🗑️ **[ข้อความถูกลบ]** ${timeDateStr}\n👤 ผู้ส่ง: ${authorTag} | ส่งที่ช่อง: <#${message.channel.id}>`;
+    let contentLog = `🗑️ **[ข้อความถูกลบ]** ${dateStr}\n👤 ผู้ส่ง: ${authorTag} | ส่งที่ช่อง: <#${message.channel.id}>`;
 
     // ถ้ามีข้อความตัวอักษรหรือลิงก์
     if (message.content) {
@@ -108,9 +105,10 @@ client.on('messageDelete', async (message) => {
     }
 });
 
-client.once('clientReady', () => {
+// ใช้ 'ready' (แก้ไขจาก 'clientReady' ให้ตรงตามมาตรฐาน discord.js)
+client.once('ready', () => {
     console.log(`🤖 บอท ${client.user.tag} ออนไลน์พร้อมระบบเก็บ Log 24 ชม.! (Render)`);
 });
 
-// ดึง Bot Token จากระบบตัวแปรลับ หรือใส่ Token ตรงๆ ไว้ก็ได้ครับ
+// ดึง Bot Token จากระบบตัวแปรลับ
 client.login(process.env.DISCORD_TOKEN);
