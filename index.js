@@ -177,9 +177,9 @@ client.on('messageUpdate', (oldMessage, newMessage) => {
 // รวมรายการประโยคที่ต้องการให้สุ่มโชว์ (สามารถเพิ่ม/ลบประโยคในนี้ได้เลย)
 const statusList = [
     // 💬 กลุ่ม Custom Status (โชว์เป็น "บับเบิ้ลคำพูด" บนโปรไฟล์) ต้องใช้ type: ActivityType.Custom และช่อง state
-    { name: 'custom', type: ActivityType.Custom, state: 'วันนี้ฉันได้เรียนรู้...' },
-    { name: 'custom', type: ActivityType.Custom, state: 'มองไรหมา? 🐶' },
-    { name: 'custom', type: ActivityType.Custom, state: 'แอบดูโปรไฟล์ทำไม ยอดรัก' },
+    { name: 'custom', type: ActivityType.Custom, state: 'โฮ่ง' },
+    { name: 'custom', type: ActivityType.Custom, state: 'มองไรหมา' },
+    { name: 'custom', type: ActivityType.Custom, state: 'คิดถึงกันมั้ย' },
 
     // 🎮 กลุ่ม Activity Status (โชว์เป็น กำลังดู / กำลังเล่น) ต้องใช้ช่อง name
     { name: 'หมาที่ส่องโปรไฟล์', type: ActivityType.Watching },
