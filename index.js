@@ -176,11 +176,16 @@ client.on('messageUpdate', (oldMessage, newMessage) => {
 // ==========================================
 // รวมรายการประโยคที่ต้องการให้สุ่มโชว์ (สามารถเพิ่ม/ลบประโยคในนี้ได้เลย)
 const statusList = [
+    // 💬 กลุ่ม Custom Status (โชว์เป็น "บับเบิ้ลคำพูด" บนโปรไฟล์) ต้องใช้ type: ActivityType.Custom และช่อง state
+    { name: 'custom', type: ActivityType.Custom, state: 'วันนี้ฉันได้เรียนรู้...' },
+    { name: 'custom', type: ActivityType.Custom, state: 'มองไรหมา? 🐶' },
+    { name: 'custom', type: ActivityType.Custom, state: 'แอบดูโปรไฟล์ทำไม ยอดรัก' },
+
+    // 🎮 กลุ่ม Activity Status (โชว์เป็น กำลังดู / กำลังเล่น) ต้องใช้ช่อง name
     { name: 'หมาที่ส่องโปรไฟล์', type: ActivityType.Watching },
     { name: 'คนคุยกันในเซิร์ฟเวอร์', type: ActivityType.Watching },
     { name: 'วิ่งไล่จับหางตัวเอง', type: ActivityType.Playing },
-    { name: 'เสียงหัวใจคีตะ', type: ActivityType.Listening },
-    { name: 'วันนี้ฉันได้เรียนรู้...', type: ActivityType.Custom }
+    { name: 'เสียงหัวใจคีตะ', type: ActivityType.Listening }
 ];
 
 function setRandomStatus() {
@@ -194,7 +199,9 @@ function setRandomStatus() {
         status: 'online', // สถานะไฟเขียว (online, idle, dnd)
     });
 
-    console.log(`🎭 เปลี่ยนสถานะบอทเป็น: ${randomStatus.name}`);
+    // ดึงข้อความมาโชว์ใน Console Log ไม่ว่าจะเป็นแบบ custom หรือแบบปกติ
+    const displayMessage = randomStatus.state || randomStatus.name;
+    console.log(`🎭 เปลี่ยนสถานะบอทเป็น: ${displayMessage}`);
 }
 
 // ใช้ 'ready' (เมื่อบอทล็อกอินสำเร็จ)
@@ -204,11 +211,10 @@ client.once('ready', () => {
     // 1. ทำการสุ่มสเตตัสทันทีที่บอทเริ่มทำงาน
     setRandomStatus();
 
-    // 2. ตั้งเวลาสุ่มเปลี่ยนสเตตัสอัตโนมัติ 
-    // ตัวอย่าง: 24 * 60 * 60 * 1000 = สุ่มใหม่ทุกๆ 1 วัน (86,400,000 มิลลิวินาที)
-    // หากต้องการให้สุ่มทุก 1 ชั่วโมง ให้เปลี่ยนเป็น (60 * 60 * 1000)
-    const ONE_DAY_MS = 24 * 60 * 60 * 10000;
-    setInterval(setRandomStatus, ONE_DAY_MS);
+    // 2. ตั้งเวลาสุ่มเปลี่ยนสเตตัสอัตโนมัติทุกๆ 17 วัน
+    // 17 วัน * 24 ชั่วโมง * 60 นาที * 60 วินาที * 1000 มิลลิวินาที
+    const SEVENTEEN_DAYS_MS = 17 * 24 * 60 * 60 * 1000; 
+    setInterval(setRandomStatus, SEVENTEEN_DAYS_MS);
 });
 
 // ดึง Bot Token จากระบบตัวแปรลับ
