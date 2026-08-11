@@ -102,12 +102,11 @@ client.on('messageCreate', (message) => {
     if (message.author.bot) return; 
     const content = message.content;
 
-    // ระบบดูรูปโปรไฟล์ /img หรือ /img @ผู้ใช้
     if (content.startsWith('/img')) {
         const targetUser = message.mentions.users.first() || message.author;
         const avatarUrl = targetUser.displayAvatarURL({ size: 4096, dynamic: true });
         
-        return message.reply(`📸 รูปโปรไฟล์ของ **${targetUser.username}** แบบชัดๆ โฮ่ง!\n${avatarUrl}`);
+        return message.reply(`profile **${targetUser.username}** \n${avatarUrl}`);
     }
 
     const greetings = ['สวัสดีครับ', 'สวัสดีค่ะ', 'ดีครับ', 'ดีค่ะ', 'ดีจ้า', 'สวัสดีจ้า'];
