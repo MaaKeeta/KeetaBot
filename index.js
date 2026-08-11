@@ -101,6 +101,15 @@ client.on('messageDelete', async (message) => {
 client.on('messageCreate', (message) => {
     if (message.author.bot) return; 
     const content = message.content;
+
+    // ระบบดูรูปโปรไฟล์ /img หรือ /img @ผู้ใช้
+    if (content.startsWith('/img')) {
+        const targetUser = message.mentions.users.first() || message.author;
+        const avatarUrl = targetUser.displayAvatarURL({ size: 4096, dynamic: true });
+        
+        return message.reply(`📸 รูปโปรไฟล์ของ **${targetUser.username}** แบบชัดๆ โฮ่ง!\n${avatarUrl}`);
+    }
+
     const greetings = ['สวัสดีครับ', 'สวัสดีค่ะ', 'ดีครับ', 'ดีค่ะ', 'ดีจ้า', 'สวัสดีจ้า'];
     if (greetings.some(word => content.includes(word))) {
         return message.reply('โฮ่ง!');
@@ -113,6 +122,7 @@ client.on('messageCreate', (message) => {
         return message.reply('บ๊อกๆ');
     }
 });
+
 client.on('messageUpdate', (oldMessage, newMessage) => {
     if (!newMessage.guild) return;
     if (newMessage.author && newMessage.author.bot) return; 
@@ -127,6 +137,7 @@ client.on('messageUpdate', (oldMessage, newMessage) => {
         logChannel.send(editLog);
     }
 });
+
 const statusList = [
     { name: 'custom', type: ActivityType.Custom, state: 'โฮ่ง' },
     { name: 'custom', type: ActivityType.Custom, state: 'หมามองไร' },
@@ -143,15 +154,18 @@ const statusList = [
     { name: 'เรื่องข้างบ้าน', type: ActivityType.Listening },
     { name: 'หมาเห่ากัน', type: ActivityType.Listening }
 ];
+
 function setRandomStatus() {
     if (!client.user) return;
     const randomStatus = statusList[Math.floor(Math.random() * statusList.length)];
     client.user.setPresence({ activities: [randomStatus] });
 } 
+
 client.once('ready', () => {
     console.log(`บอท ${client.user.tag} ออนไลน์พร้อมฟีเจอร์ใหม่เพียบ! (Render)`);
     setRandomStatus();
     const SEVENTEEN_DAYS_MS = 17 * 24 * 60 * 60 * 1000; 
     setInterval(setRandomStatus, SEVENTEEN_DAYS_MS);
 });
+
 client.login(process.env.DISCORD_TOKEN);
