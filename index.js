@@ -15,6 +15,7 @@ const client = new Client({
 });
 
 const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID || '1535687188048511036';
+
 function getDateStr() {
     const optionsDate = { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'numeric', year: 'numeric' };
     const dateString = new Intl.DateTimeFormat('en-GB', optionsDate).format(new Date()); 
@@ -33,27 +34,47 @@ client.on('voiceStateUpdate', (oldState, newState) => {
     if (member.user.bot) return;
 
     const dateStr = getDateStr();
+    
+    // ป้องกันกรณีที่ channel ไม่มีชื่อตอนผู้ใช้ออก (เพื่อไม่ให้บอทพัง)
+    const channelName = newState.channel ? newState.channel.name : (oldState.channel ? oldState.channel.name : 'ไม่ทราบห้อง');
 
+    // --- เช็คการเข้า/ออก/ย้ายห้อง ---
     if (!oldState.channelId && newState.channelId) {
-        logChannel.send(`${dateStr} <@${member.id}> เข้า **${newState.channel.name}**`);
+        logChannel.send(`${dateStr} 🟢 <@${member.id}> เข้า **${channelName}**`);
     }
     else if (oldState.channelId && !newState.channelId) {
-        logChannel.send(`${dateStr} <@${member.id}> ออก **${oldState.channel.name}**`);
+        logChannel.send(`${dateStr} 🔴 <@${member.id}> ออก **${channelName}**`);
     }
     else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
-        logChannel.send(`${dateStr} <@${member.id}> ย้ายจาก **${oldState.channel.name}** ไป **${newState.channel.name}**`);
+        logChannel.send(`${dateStr} 🔄 <@${member.id}> ย้ายจาก **${oldState.channel.name}** ไป **${channelName}**`);
     }
 
+    // --- เช็คการเปิด/ปิดไมค์ ---
+    if (!oldState.selfMute && newState.selfMute) {
+        logChannel.send(`${dateStr} 🔇 <@${member.id}> **ปิดไมค์** ในห้อง **${channelName}**`);
+    } else if (oldState.selfMute && !newState.selfMute) {
+        logChannel.send(`${dateStr} 🎙️ <@${member.id}> **เปิดไมค์** ในห้อง **${channelName}**`);
+    }
+
+    // --- เช็คการเปิด/ปิดลำโพง (Deafen) ---
+    if (!oldState.selfDeaf && newState.selfDeaf) {
+        logChannel.send(`${dateStr} 🔈 <@${member.id}> **ปิดหูฟัง/ลำโพง** ในห้อง **${channelName}**`);
+    } else if (oldState.selfDeaf && !newState.selfDeaf) {
+        logChannel.send(`${dateStr} 🔊 <@${member.id}> **เปิดหูฟัง/ลำโพง** ในห้อง **${channelName}**`);
+    }
+
+    // --- เช็คการเปิด/ปิดกล้อง ---
     if (!oldState.selfVideo && newState.selfVideo) {
-        logChannel.send(`${dateStr} 📹 <@${member.id}> เริ่ม **เปิดกล้อง** ในห้อง **${newState.channel.name}**`);
+        logChannel.send(`${dateStr} 📹 <@${member.id}> เริ่ม **เปิดกล้อง** ในห้อง **${channelName}**`);
     } else if (oldState.selfVideo && !newState.selfVideo) {
-        logChannel.send(`${dateStr} 📹 <@${member.id}> ปิดกล้องในห้อง **${newState.channel.name}**`);
+        logChannel.send(`${dateStr} 📵 <@${member.id}> **ปิดกล้อง** ในห้อง **${channelName}**`);
     }
 
+    // --- เช็คการแชร์หน้าจอ ---
     if (!oldState.streaming && newState.streaming) {
-        logChannel.send(`${dateStr} 🛑 <@${member.id}> เริ่ม **สตรีมหน้าจอ** ในห้อง **${newState.channel.name}**`);
+        logChannel.send(`${dateStr} 🖥️ <@${member.id}> เริ่ม **สตรีมหน้าจอ** ในห้อง **${channelName}**`);
     } else if (oldState.streaming && !newState.streaming) {
-        logChannel.send(`${dateStr} 🛑 <@${member.id}> หยุดสตรีมหน้าจอในห้อง **${newState.channel.name}**`);
+        logChannel.send(`${dateStr} 🛑 <@${member.id}> **หยุดสตรีมหน้าจอ** ในห้อง **${channelName}**`);
     }
 });
 
@@ -147,7 +168,6 @@ const statusList = [
     { name: 'custom', type: ActivityType.Custom, state: 'ดีจ้า' },
     { name: 'custom', type: ActivityType.Custom, state: 'คิดถึงนะ' },
     { name: 'custom', type: ActivityType.Custom, state: 'หิววว' },
-
     { name: 'หมาที่ส่องโปรไฟล์', type: ActivityType.Watching },
     { name: 'หมาที่อยู่ในดิส', type: ActivityType.Watching },
     { name: 'เรื่องข้างบ้าน', type: ActivityType.Listening },
