@@ -1,143 +1,30 @@
-const { Client, GatewayIntentBits, AuditLogEvent, ActivityType } = require('discord.js');
-const express = require('express');
-const app = express();
-const PORT = process.env.PORT || 3000;
-app.get('/', (req, res) => res.send('ระบบเก็บ Log 24 ชั่วโมงกำลังทำงาน!'));
-app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
-
-const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildVoiceStates,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
-    ]
-});
-
-const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID || '1535687188048511036';
-
-function getDateStr() {
-    const optionsDate = { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'numeric', year: 'numeric' };
-    const dateString = new Intl.DateTimeFormat('en-GB', optionsDate).format(new Date()); 
-    
-    const [day, month, yearCE] = dateString.split('/');
-    const yearBE = parseInt(yearCE) + 543;
-
-    return `${day}/${month}/${yearBE}`;
-}
-
-client.on('voiceStateUpdate', (oldState, newState) => {
-    const logChannel = newState.guild.channels.cache.get(LOG_CHANNEL_ID);
-    if (!logChannel) return;
-
-    const member = newState.member;
-    if (member.user.bot) return;
-
-    const dateStr = getDateStr();
-    const channelName = newState.channel ? newState.channel.name : (oldState.channel ? oldState.channel.name : 'ไม่ทราบห้อง');
-
-    if (!oldState.channelId && newState.channelId) {
-        logChannel.send(`${dateStr} <@${member.id}> เข้า **${channelName}**`);
-    }
-    else if (oldState.channelId && !newState.channelId) {
-        logChannel.send(`${dateStr} <@${member.id}> ออก **${channelName}**`);
-    }
-    else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
-        logChannel.send(`${dateStr} <@${member.id}> ย้ายจาก **${oldState.channel.name}** ไป **${channelName}**`);
-    }
-
-    if (!oldState.selfMute && newState.selfMute) {
-        logChannel.send(`${dateStr} 🎙️ <@${member.id}> **ปิดไมค์**`);
-    } else if (oldState.selfMute && !newState.selfMute) {
-        logChannel.send(`${dateStr} 🎙️ <@${member.id}> **เปิดไมค์**`);
-    }
-
-    if (!oldState.selfDeaf && newState.selfDeaf) {
-        logChannel.send(`${dateStr} 🔈 <@${member.id}> **ปิดหูฟัง/ลำโพง**`);
-    } else if (oldState.selfDeaf && !newState.selfDeaf) {
-        logChannel.send(`${dateStr} 🔊 <@${member.id}> **เปิดหูฟัง/ลำโพง**`);
-    }
-
-    if (!oldState.selfVideo && newState.selfVideo) {
-        logChannel.send(`${dateStr} 📹 <@${member.id}> เริ่ม **เปิดกล้อง** ในห้อง **${channelName}**`);
-    } else if (oldState.selfVideo && !newState.selfVideo) {
-        logChannel.send(`${dateStr} 📹 <@${member.id}> **ปิดกล้อง** ในห้อง **${channelName}**`);
-    }
-
-    if (!oldState.streaming && newState.streaming) {
-        logChannel.send(`${dateStr} 🛑 <@${member.id}> เริ่ม **สตรีมหน้าจอ** ในห้อง **${channelName}**`);
-    } else if (oldState.streaming && !newState.streaming) {
-        logChannel.send(`${dateStr} 🛑 <@${member.id}> **หยุดสตรีมหน้าจอ** ในห้อง **${channelName}**`);
-    }
-});
-
-client.on('messageDelete', async (message) => {
-    if (!message.guild) return;
-
-    const logChannel = message.guild.channels.cache.get(LOG_CHANNEL_ID);
-    if (!logChannel) return;
-    const dateStr = getDateStr();
-    const authorTag = message.author ? `<@${message.author.id}>` : 'ไม่ทราบผู้ใช้';
-    let executorTag = `${authorTag} ลบเอง`; 
-
-    try {
-        const fetchedLogs = await message.guild.fetchAuditLogs({
-            limit: 1,
-            type: AuditLogEvent.MessageDelete,
-        });
-        const deletionLog = fetchedLogs.entries.first();
-
-        if (deletionLog) {
-            const { executor, target, createdTimestamp } = deletionLog;
-            if (message.author && target.id === message.author.id && createdTimestamp > (Date.now() - 5000)) {
-                executorTag = `<@${executor.id}>`; 
-            }
-        }
-    } catch (error) {
-        console.log("บอทอ่าน Audit Log ไม่ได้ หรือไม่มีสิทธิ์");
-    }
-
-    let contentLog = `🗑️  ${dateStr} | ลบข้อความของ ${authorTag}\nคนลบ : ${executorTag} | ช่อง : <#${message.channel.id}>`;
-    if (message.content) {
-        contentLog += `\n"${message.content}"`;
-    }
-    await logChannel.send(contentLog);
-
-    if (message.attachments.size > 0) {
-        let attachmentUrls = [];
-        message.attachments.forEach(attachment => {
-            attachmentUrls.push(attachment.url);
-        });
-        await logChannel.send(attachmentUrls.join('\n'));
-    }
-});
-
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return; 
     let content = message.content;
-
-    // --- ระบบแปลงลิงก์อัตโนมัติเพื่อให้พรีวิวรูปภาพ/วิดีโอขึ้นแสดง ---
     let isConverted = false;
 
-    // แปลง Twitter / X -> FixupX
-    if (/(https?:\/\/(www\.)?(twitter|x)\.com\/[^\s]+)/gi.test(content)) {
-        content = content.replace(/https?:\/\/(www\.)?(twitter|x)\.com/gi, 'https://fixupx.com');
+    // --- แปลงแค่ลิงก์ IG และ Facebook ตามที่คุณต้องการ ---
+    
+    // แปลง Instagram -> kkinstagram (เพื่อให้ Discord ดึงชื่อ แคปชั่น และรูปมาโชว์)
+    if (/(https?:\/\/(www\.)?instagram\.com\/[^\s]+)/gi.test(content)) {
+        content = content.replace(/https?:\/\/(www\.)?instagram\.com/gi, 'https://www.kkinstagram.com');
         isConverted = true;
     }
-    // แปลง Instagram -> DDInstagram
-    else if (/(https?:\/\/(www\.)?instagram\.com\/[^\s]+)/gi.test(content)) {
-        content = content.replace(/https?:\/\/(www\.)?instagram\.com/gi, 'https://kkinstagram.com');
-        isConverted = true;
-    }
-    // แปลง Facebook -> FXFacebook
+    // แปลง Facebook -> fxfacebook (kkinstagram ใช้กับเฟสไม่ได้ ต้องใช้ตัวนี้แทน)
     else if (/(https?:\/\/(www\.|web\.|m\.)?facebook\.com\/[^\s]+)/gi.test(content)) {
         content = content.replace(/https?:\/\/(www\.|web\.|m\.)?facebook\.com/gi, 'https://fxfacebook.com');
         isConverted = true;
     }
 
     if (isConverted) {
-        // ส่งลิงก์ใหม่ที่ถูกแปลงแล้วกลับไป เพื่อให้รูปขึ้นพรีวิวในแชท
-        return message.reply({ content: content, allowedMentions: { repliedUser: false } });
+        // ให้บอทตอบกลับด้วยลิงก์ที่แปลงแล้ว
+        await message.reply({ content: content, allowedMentions: { repliedUser: false } });
+        
+        // ซ่อนพรีวิวของลิงก์ต้นฉบับ(ที่รูปไม่ขึ้น) เพื่อไม่ให้แชทรก
+        setTimeout(() => {
+            message.suppressEmbeds(true).catch(() => console.log('ไม่มีสิทธิ์ซ่อน Embed หรือข้อความถูกลบไปแล้ว'));
+        }, 1000);
+        return; 
     }
     // --------------------------------------------------------
 
@@ -160,50 +47,3 @@ client.on('messageCreate', async (message) => {
         return message.reply('บ๊อกๆ');
     }
 });
-
-client.on('messageUpdate', (oldMessage, newMessage) => {
-    if (!newMessage.guild) return;
-    if (newMessage.author && newMessage.author.bot) return; 
-    
-    if (!oldMessage.content || !newMessage.content) return; 
-    if (oldMessage.content !== newMessage.content) {
-        const logChannel = newMessage.guild.channels.cache.get(LOG_CHANNEL_ID);
-        if (!logChannel) return;
-        const dateStr = getDateStr();
-        const authorTag = `<@${newMessage.author.id}>`;
-        const editLog = `✏️ ${dateStr} | แก้ไขข้อความ\nผู้ส่ง: ${authorTag} | ช่อง : <#${newMessage.channel.id}>\n"${oldMessage.content}"เป็น : "${newMessage.content}"`;
-        logChannel.send(editLog);
-    }
-});
-
-const statusList = [
-    { name: 'custom', type: ActivityType.Custom, state: 'โฮ่ง' },
-    { name: 'custom', type: ActivityType.Custom, state: 'หมามองไร' },
-    { name: 'custom', type: ActivityType.Custom, state: 'คิดถึงกันมั้ย' },
-    { name: 'custom', type: ActivityType.Custom, state: 'คิดถึงอะดิ้' },
-    { name: 'custom', type: ActivityType.Custom, state: 'เห่า' },
-    { name: 'custom', type: ActivityType.Custom, state: 'หอน' },
-    { name: 'custom', type: ActivityType.Custom, state: 'ดีจ้า' },
-    { name: 'custom', type: ActivityType.Custom, state: 'คิดถึงนะ' },
-    { name: 'custom', type: ActivityType.Custom, state: 'หิววว' },
-
-    { name: 'หมาที่ส่องโปรไฟล์', type: ActivityType.Watching },
-    { name: 'หมาที่อยู่ในดิส', type: ActivityType.Watching },
-    { name: 'เรื่องข้างบ้าน', type: ActivityType.Listening },
-    { name: 'หมาเห่ากัน', type: ActivityType.Listening }
-];
-
-function setRandomStatus() {
-    if (!client.user) return;
-    const randomStatus = statusList[Math.floor(Math.random() * statusList.length)];
-    client.user.setPresence({ activities: [randomStatus] });
-} 
-
-client.once('ready', () => {
-    console.log(`บอท ${client.user.tag} ออนไลน์ (Render)`);
-    setRandomStatus();
-    const SEVENTEEN_DAYS_MS = 17 * 24 * 60 * 60 * 1000; 
-    setInterval(setRandomStatus, SEVENTEEN_DAYS_MS);
-});
-
-client.login(process.env.DISCORD_TOKEN);
