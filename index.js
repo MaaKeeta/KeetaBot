@@ -35,10 +35,8 @@ client.on('voiceStateUpdate', (oldState, newState) => {
 
     const dateStr = getDateStr();
     
-    // ป้องกันกรณีที่ channel ไม่มีชื่อตอนผู้ใช้ออก (เพื่อไม่ให้บอทพัง)
     const channelName = newState.channel ? newState.channel.name : (oldState.channel ? oldState.channel.name : 'ไม่ทราบห้อง');
 
-    // --- เช็คการเข้า/ออก/ย้ายห้อง ---
     if (!oldState.channelId && newState.channelId) {
         logChannel.send(`${dateStr} <@${member.id}> เข้า **${channelName}**`);
     }
@@ -49,28 +47,24 @@ client.on('voiceStateUpdate', (oldState, newState) => {
         logChannel.send(`${dateStr} <@${member.id}> ย้ายจาก **${oldState.channel.name}** ไป **${channelName}**`);
     }
 
-    // --- เช็คการเปิด/ปิดไมค์ ---
     if (!oldState.selfMute && newState.selfMute) {
         logChannel.send(`${dateStr} 🎙️ <@${member.id}> **ปิดไมค์**`);
     } else if (oldState.selfMute && !newState.selfMute) {
         logChannel.send(`${dateStr} 🎙️ <@${member.id}> **เปิดไมค์**`);
     }
 
-    // --- เช็คการเปิด/ปิดลำโพง (Deafen) ---
     if (!oldState.selfDeaf && newState.selfDeaf) {
         logChannel.send(`${dateStr} 🔈 <@${member.id}> **ปิดหูฟัง/ลำโพง**`);
     } else if (oldState.selfDeaf && !newState.selfDeaf) {
         logChannel.send(`${dateStr} 🔊 <@${member.id}> **เปิดหูฟัง/ลำโพง**`);
     }
 
-    // --- เช็คการเปิด/ปิดกล้อง ---
     if (!oldState.selfVideo && newState.selfVideo) {
         logChannel.send(`${dateStr} 📹 <@${member.id}> เริ่ม **เปิดกล้อง** ในห้อง **${channelName}**`);
     } else if (oldState.selfVideo && !newState.selfVideo) {
         logChannel.send(`${dateStr} 📹 <@${member.id}> **ปิดกล้อง** ในห้อง **${channelName}**`);
     }
 
-    // --- เช็คการแชร์หน้าจอ ---
     if (!oldState.streaming && newState.streaming) {
         logChannel.send(`${dateStr} 🛑 <@${member.id}> เริ่ม **สตรีมหน้าจอ** ในห้อง **${channelName}**`);
     } else if (oldState.streaming && !newState.streaming) {
