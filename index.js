@@ -34,7 +34,6 @@ client.on('voiceStateUpdate', (oldState, newState) => {
     if (member.user.bot) return;
 
     const dateStr = getDateStr();
-    
     const channelName = newState.channel ? newState.channel.name : (oldState.channel ? oldState.channel.name : 'ไม่ทราบห้อง');
 
     if (!oldState.channelId && newState.channelId) {
@@ -113,9 +112,34 @@ client.on('messageDelete', async (message) => {
     }
 });
 
-client.on('messageCreate', (message) => {
+client.on('messageCreate', async (message) => {
     if (message.author.bot) return; 
-    const content = message.content;
+    let content = message.content;
+
+    // --- ระบบแปลงลิงก์อัตโนมัติเพื่อให้พรีวิวรูปภาพ/วิดีโอขึ้นแสดง ---
+    let isConverted = false;
+
+    // แปลง Twitter / X -> FixupX
+    if (/(https?:\/\/(www\.)?(twitter|x)\.com\/[^\s]+)/gi.test(content)) {
+        content = content.replace(/https?:\/\/(www\.)?(twitter|x)\.com/gi, 'https://fixupx.com');
+        isConverted = true;
+    }
+    // แปลง Instagram -> DDInstagram
+    else if (/(https?:\/\/(www\.)?instagram\.com\/[^\s]+)/gi.test(content)) {
+        content = content.replace(/https?:\/\/(www\.)?instagram\.com/gi, 'https://ddinstagram.com');
+        isConverted = true;
+    }
+    // แปลง Facebook -> FXFacebook
+    else if (/(https?:\/\/(www\.|web\.|m\.)?facebook\.com\/[^\s]+)/gi.test(content)) {
+        content = content.replace(/https?:\/\/(www\.|web\.|m\.)?facebook\.com/gi, 'https://fxfacebook.com');
+        isConverted = true;
+    }
+
+    if (isConverted) {
+        // ส่งลิงก์ใหม่ที่ถูกแปลงแล้วกลับไป เพื่อให้รูปขึ้นพรีวิวในแชท
+        return message.reply({ content: content, allowedMentions: { repliedUser: false } });
+    }
+    // --------------------------------------------------------
 
     if (content.startsWith('/img')) {
         const targetUser = message.mentions.users.first() || message.author;
@@ -162,6 +186,7 @@ const statusList = [
     { name: 'custom', type: ActivityType.Custom, state: 'ดีจ้า' },
     { name: 'custom', type: ActivityType.Custom, state: 'คิดถึงนะ' },
     { name: 'custom', type: ActivityType.Custom, state: 'หิววว' },
+
     { name: 'หมาที่ส่องโปรไฟล์', type: ActivityType.Watching },
     { name: 'หมาที่อยู่ในดิส', type: ActivityType.Watching },
     { name: 'เรื่องข้างบ้าน', type: ActivityType.Listening },
