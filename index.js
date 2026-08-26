@@ -126,7 +126,7 @@ client.on('messageCreate', async (message) => {
     }
     // แปลง Instagram -> DDInstagram
     else if (/(https?:\/\/(www\.)?instagram\.com\/[^\s]+)/gi.test(content)) {
-        content = content.replace(/https?:\/\/(www\.)?instagram\.com/gi, 'https://ddinstagram.com');
+        content = content.replace(/https?:\/\/(www\.)?instagram\.com/gi, 'https://kkinstagram.com');
         isConverted = true;
     }
     // แปลง Facebook -> FXFacebook
