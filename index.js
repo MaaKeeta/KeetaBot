@@ -19,7 +19,7 @@ const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID || '1535687188048511036';
 function getDateStr() {
     const optionsDate = { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'numeric', year: 'numeric' };
     const dateString = new Intl.DateTimeFormat('en-GB', optionsDate).format(new Date()); 
-    
+
     const [day, month, yearCE] = dateString.split('/');
     const yearBE = parseInt(yearCE) + 543;
 
@@ -115,37 +115,30 @@ client.on('messageDelete', async (message) => {
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return; 
     let content = message.content;
-    let isConverted = false;
-
-    // --- แปลงแค่ลิงก์ IG และ Facebook ตามที่คุณต้องการ ---
     
-    // แปลง Instagram -> kkinstagram (เพื่อให้ Discord ดึงชื่อ แคปชั่น และรูปมาโชว์)
-    if (/(https?:\/\/(www\.)?instagram\.com\/[^\s]+)/gi.test(content)) {
-        content = content.replace(/https?:\/\/(www\.)?instagram\.com/gi, 'https://www.kkinstagram.com');
-        isConverted = true;
-    }
-    // แปลง Facebook -> fxfacebook (kkinstagram ใช้กับเฟสไม่ได้ ต้องใช้ตัวนี้แทน)
-    else if (/(https?:\/\/(www\.|web\.|m\.)?facebook\.com\/[^\s]+)/gi.test(content)) {
-        content = content.replace(/https?:\/\/(www\.|web\.|m\.)?facebook\.com/gi, 'https://fxfacebook.com');
-        isConverted = true;
-    }
+    const allowedChannels = ['1394626249149780089', '1394633403403337858'];
+    const igRegex = /(https?:\/\/(www\.)?instagram\.com\/[^\s]+)/gi;
 
-    if (isConverted) {
-        // ให้บอทตอบกลับด้วยลิงก์ที่แปลงแล้ว
-        await message.reply({ content: content, allowedMentions: { repliedUser: false } });
-        
-        // ซ่อนพรีวิวของลิงก์ต้นฉบับ(ที่รูปไม่ขึ้น) เพื่อไม่ให้แชทรก
-        setTimeout(() => {
-            message.suppressEmbeds(true).catch(() => console.log('ไม่มีสิทธิ์ซ่อน Embed หรือข้อความถูกลบไปแล้ว'));
-        }, 1000);
-        return; 
+    if (allowedChannels.includes(message.channel.id)) {
+        const matches = content.match(igRegex);
+        if (matches) {
+            const convertedLinks = matches.map(url => 
+                url.replace(/https?:\/\/(www\.)?instagram\.com/gi, 'https://www.kkinstagram.com')
+            );
+
+            await message.reply({ content: convertedLinks.join('\n'), allowedMentions: { repliedUser: false } });
+            setTimeout(() => {
+                message.suppressEmbeds(true).catch(() => console.log('ไม่มีสิทธิ์ซ่อน Embed หรือข้อความถูกลบไปแล้ว'));
+            }, 1000);
+            
+            return; 
+        }
     }
-    // --------------------------------------------------------
 
     if (content.startsWith('/img')) {
         const targetUser = message.mentions.users.first() || message.author;
         const avatarUrl = targetUser.displayAvatarURL({ size: 4096, dynamic: true });
-        
+
         return message.reply(`profile **${targetUser.username}** \n${avatarUrl}`);
     }
 
@@ -165,7 +158,7 @@ client.on('messageCreate', async (message) => {
 client.on('messageUpdate', (oldMessage, newMessage) => {
     if (!newMessage.guild) return;
     if (newMessage.author && newMessage.author.bot) return; 
-    
+
     if (!oldMessage.content || !newMessage.content) return; 
     if (oldMessage.content !== newMessage.content) {
         const logChannel = newMessage.guild.channels.cache.get(LOG_CHANNEL_ID);
