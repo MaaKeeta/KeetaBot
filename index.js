@@ -40,39 +40,39 @@ client.on('voiceStateUpdate', (oldState, newState) => {
 
     // --- เช็คการเข้า/ออก/ย้ายห้อง ---
     if (!oldState.channelId && newState.channelId) {
-        logChannel.send(`${dateStr} 🟢 <@${member.id}> เข้า **${channelName}**`);
+        logChannel.send(`${dateStr} <@${member.id}> เข้า **${channelName}**`);
     }
     else if (oldState.channelId && !newState.channelId) {
-        logChannel.send(`${dateStr} 🔴 <@${member.id}> ออก **${channelName}**`);
+        logChannel.send(`${dateStr} <@${member.id}> ออก **${channelName}**`);
     }
     else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
-        logChannel.send(`${dateStr} 🔄 <@${member.id}> ย้ายจาก **${oldState.channel.name}** ไป **${channelName}**`);
+        logChannel.send(`${dateStr} <@${member.id}> ย้ายจาก **${oldState.channel.name}** ไป **${channelName}**`);
     }
 
     // --- เช็คการเปิด/ปิดไมค์ ---
     if (!oldState.selfMute && newState.selfMute) {
-        logChannel.send(`${dateStr} 🔇 <@${member.id}> **ปิดไมค์** ในห้อง **${channelName}**`);
+        logChannel.send(`${dateStr} 🎙️ <@${member.id}> **ปิดไมค์**`);
     } else if (oldState.selfMute && !newState.selfMute) {
-        logChannel.send(`${dateStr} 🎙️ <@${member.id}> **เปิดไมค์** ในห้อง **${channelName}**`);
+        logChannel.send(`${dateStr} 🎙️ <@${member.id}> **เปิดไมค์**`);
     }
 
     // --- เช็คการเปิด/ปิดลำโพง (Deafen) ---
     if (!oldState.selfDeaf && newState.selfDeaf) {
-        logChannel.send(`${dateStr} 🔈 <@${member.id}> **ปิดหูฟัง/ลำโพง** ในห้อง **${channelName}**`);
+        logChannel.send(`${dateStr} 🔈 <@${member.id}> **ปิดหูฟัง/ลำโพง**`);
     } else if (oldState.selfDeaf && !newState.selfDeaf) {
-        logChannel.send(`${dateStr} 🔊 <@${member.id}> **เปิดหูฟัง/ลำโพง** ในห้อง **${channelName}**`);
+        logChannel.send(`${dateStr} 🔊 <@${member.id}> **เปิดหูฟัง/ลำโพง**`);
     }
 
     // --- เช็คการเปิด/ปิดกล้อง ---
     if (!oldState.selfVideo && newState.selfVideo) {
         logChannel.send(`${dateStr} 📹 <@${member.id}> เริ่ม **เปิดกล้อง** ในห้อง **${channelName}**`);
     } else if (oldState.selfVideo && !newState.selfVideo) {
-        logChannel.send(`${dateStr} 📵 <@${member.id}> **ปิดกล้อง** ในห้อง **${channelName}**`);
+        logChannel.send(`${dateStr} 📹 <@${member.id}> **ปิดกล้อง** ในห้อง **${channelName}**`);
     }
 
     // --- เช็คการแชร์หน้าจอ ---
     if (!oldState.streaming && newState.streaming) {
-        logChannel.send(`${dateStr} 🖥️ <@${member.id}> เริ่ม **สตรีมหน้าจอ** ในห้อง **${channelName}**`);
+        logChannel.send(`${dateStr} 🛑 <@${member.id}> เริ่ม **สตรีมหน้าจอ** ในห้อง **${channelName}**`);
     } else if (oldState.streaming && !newState.streaming) {
         logChannel.send(`${dateStr} 🛑 <@${member.id}> **หยุดสตรีมหน้าจอ** ในห้อง **${channelName}**`);
     }
@@ -181,7 +181,7 @@ function setRandomStatus() {
 } 
 
 client.once('ready', () => {
-    console.log(`บอท ${client.user.tag} ออนไลน์พร้อมฟีเจอร์ใหม่เพียบ! (Render)`);
+    console.log(`บอท ${client.user.tag} ออนไลน์ (Render)`);
     setRandomStatus();
     const SEVENTEEN_DAYS_MS = 17 * 24 * 60 * 60 * 1000; 
     setInterval(setRandomStatus, SEVENTEEN_DAYS_MS);
