@@ -18,12 +18,18 @@ const client = new Client({
 
 const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID || '1535687188048511036';
 const allowedChannels = ['1394626249149780089', '1394633403403337858'];
-const IG_PROXY_DOMAIN = process.env.IG_PROXY_DOMAIN || 'oginstagram.com';
-const FB_PROXY_DOMAIN = process.env.FB_PROXY_DOMAIN || 'facebed.com';
+const IG_PROXY_DOMAIN = 'oginstagram.com';
+const FB_PROXY_DOMAIN = 'facebed.com';
+const CACHE_TTL = 10 * 60 * 1000;
+const metadataCache = new Map();
 
 function getDateStr() {
-    const optionsDate = { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'numeric', year: 'numeric' };
-    const dateString = new Intl.DateTimeFormat('en-GB', optionsDate).format(new Date());
+    const dateString = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Bangkok',
+        day: 'numeric',
+        month: 'numeric',
+        year: 'numeric'
+    }).format(new Date());
     const [day, month, yearCE] = dateString.split('/');
     return `${day}/${month}/${parseInt(yearCE) + 543}`;
 }
@@ -35,8 +41,10 @@ function cleanUrl(url) {
 function getSocialType(url) {
     try {
         const hostname = new URL(cleanUrl(url)).hostname.toLowerCase();
+
         if (['instagram.com', 'www.instagram.com'].includes(hostname)) return 'instagram';
         if (['facebook.com', 'www.facebook.com', 'm.facebook.com', 'fb.watch'].includes(hostname)) return 'facebook';
+
         return null;
     } catch {
         return null;
@@ -67,10 +75,11 @@ function decodeHtml(text = '') {
         .replace(/&amp;/gi, '&')
         .replace(/&quot;/gi, '"')
         .replace(/&#39;/gi, "'")
+        .replace(/&#x27;/gi, "'")
         .replace(/&lt;/gi, '<')
         .replace(/&gt;/gi, '>')
-        .replace(/&#x27;/gi, "'")
-        .replace(/&#x2F;/gi, '/');
+        .replace(/&#x2F;/gi, '/')
+        .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
 }
 
 function stripHtml(text = '') {
@@ -84,12 +93,13 @@ function stripHtml(text = '') {
     );
 }
 
-function getMeta(html, property) {
+function getMeta(html, name) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const patterns = [
-        new RegExp(`<meta[^>]+property=["']${property}["'][^>]+content=["']([^"']*)["'][^>]*>`, 'i'),
-        new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+property=["']${property}["'][^>]*>`, 'i'),
-        new RegExp(`<meta[^>]+name=["']${property}["'][^>]+content=["']([^"']*)["'][^>]*>`, 'i'),
-        new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+name=["']${property}["'][^>]*>`, 'i')
+        new RegExp(`<meta[^>]+property=["']${escaped}["'][^>]+content=["']([^"']*)["'][^>]*>`, 'i'),
+        new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+property=["']${escaped}["'][^>]*>`, 'i'),
+        new RegExp(`<meta[^>]+name=["']${escaped}["'][^>]+content=["']([^"']*)["'][^>]*>`, 'i'),
+        new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+name=["']${escaped}["'][^>]*>`, 'i')
     ];
 
     for (const regex of patterns) {
@@ -102,6 +112,7 @@ function getMeta(html, property) {
 
 function absoluteUrl(url, baseUrl) {
     if (!url) return null;
+
     try {
         return new URL(url, baseUrl).href;
     } catch {
@@ -114,8 +125,10 @@ function limitText(text, max) {
     return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
 
-function extractAuthor(title = '') {
-    const match = title.match(/^(.+?)\s*\(@([^)]+)\)/);
+function parseAuthor(title = '') {
+    const cleaned = stripHtml(title);
+
+    const match = cleaned.match(/^(.+?)\s*\(@([^)]+)\)/);
 
     if (match) {
         return {
@@ -124,50 +137,140 @@ function extractAuthor(title = '') {
         };
     }
 
+    const usernameMatch = cleaned.match(/@([A-Za-z0-9._-]+)/);
+
     return {
-        name: title.trim(),
-        username: ''
+        name: cleaned.trim(),
+        username: usernameMatch ? `@${usernameMatch[1]}` : ''
     };
 }
 
+function parseDate(value) {
+    if (!value) return null;
+
+    const timestamp = Date.parse(value);
+
+    return Number.isNaN(timestamp) ? null : new Date(timestamp);
+}
+
+function getCache(key) {
+    const cached = metadataCache.get(key);
+
+    if (!cached) return null;
+
+    if (Date.now() - cached.timestamp > CACHE_TTL) {
+        metadataCache.delete(key);
+        return null;
+    }
+
+    return cached.data;
+}
+
+function setCache(key, data) {
+    metadataCache.set(key, {
+        timestamp: Date.now(),
+        data
+    });
+
+    if (metadataCache.size > 500) {
+        const oldestKey = metadataCache.keys().next().value;
+        if (oldestKey) metadataCache.delete(oldestKey);
+    }
+}
+
+async function requestPage(url, type) {
+    const userAgents = type === 'facebook'
+        ? [
+            'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36'
+        ]
+        : [
+            'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36'
+        ];
+
+    for (const userAgent of userAgents) {
+        try {
+            const response = await fetch(url, {
+                method: 'GET',
+                redirect: 'follow',
+                headers: {
+                    'User-Agent': userAgent,
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9'
+                },
+                signal: AbortSignal.timeout(15000)
+            });
+
+            if (response.ok) {
+                return response;
+            }
+
+            console.log(`Proxy ตอบ ${response.status}: ${url}`);
+        } catch (error) {
+            console.log(`Request ไม่สำเร็จ: ${url} | ${error.message}`);
+        }
+    }
+
+    return null;
+}
+
 async function fetchSocialMetadata(originalUrl) {
-    const type = getSocialType(originalUrl);
-    const proxyUrl = convertSocialUrl(originalUrl);
+    const cleanedOriginalUrl = cleanUrl(originalUrl);
+    const cached = getCache(cleanedOriginalUrl);
+
+    if (cached) return cached;
+
+    const type = getSocialType(cleanedOriginalUrl);
+    const proxyUrl = convertSocialUrl(cleanedOriginalUrl);
 
     if (!type || !proxyUrl) return null;
 
+    const response = await requestPage(proxyUrl, type);
+
+    if (!response) return null;
+
     try {
-        const response = await fetch(proxyUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (compatible; DiscordEmbedBot/1.0)'
-            },
-            redirect: 'follow'
-        });
-
-        if (!response.ok) {
-            console.log(`โหลดข้อมูลไม่สำเร็จ ${response.status}: ${proxyUrl}`);
-            return null;
-        }
-
         const html = await response.text();
+        const finalUrl = response.url || proxyUrl;
+
         const title = getMeta(html, 'og:title') || getMeta(html, 'twitter:title') || '';
         const description = getMeta(html, 'og:description') || getMeta(html, 'twitter:description') || '';
         const image = getMeta(html, 'og:image') || getMeta(html, 'twitter:image') || '';
+        const video = getMeta(html, 'og:video') || getMeta(html, 'og:video:url') || getMeta(html, 'twitter:player:stream') || '';
         const siteName = getMeta(html, 'og:site_name') || (type === 'instagram' ? 'Instagram' : 'Facebook');
-        const author = extractAuthor(title);
+        const publishedTime = getMeta(html, 'article:published_time') || getMeta(html, 'og:updated_time');
+        const authorName = getMeta(html, 'author') || getMeta(html, 'profile:username') || getMeta(html, 'twitter:creator');
+        const authorImage = getMeta(html, 'profile:image') || getMeta(html, 'twitter:image');
 
-        return {
+        const parsedTitleAuthor = parseAuthor(title);
+
+        const data = {
             type,
-            originalUrl: cleanUrl(originalUrl),
+            originalUrl: cleanedOriginalUrl,
             proxyUrl,
-            title: title || siteName,
+            finalUrl,
+            title: stripHtml(title),
             description: stripHtml(description),
-            image: absoluteUrl(image, proxyUrl),
+            image: absoluteUrl(image, finalUrl),
+            video: absoluteUrl(video, finalUrl),
             siteName,
-            author
+            authorName: authorName || parsedTitleAuthor.name,
+            username: parsedTitleAuthor.username,
+            authorImage: absoluteUrl(authorImage, finalUrl),
+            publishedTime: parseDate(publishedTime)
         };
+
+        if (!data.title && !data.description && !data.image && !data.video) {
+            console.log(`ไม่พบ metadata ที่ใช้ทำ Embed: ${originalUrl}`);
+            return null;
+        }
+
+        setCache(cleanedOriginalUrl, data);
+
+        return data;
     } catch (error) {
-        console.log(`ดึงข้อมูล Social ไม่สำเร็จ: ${originalUrl}`, error.message);
+        console.log(`อ่าน metadata ไม่สำเร็จ: ${originalUrl} | ${error.message}`);
         return null;
     }
 }
@@ -179,20 +282,40 @@ function createSocialEmbed(data) {
 
     const embed = new EmbedBuilder()
         .setColor(color)
-        .setURL(data.originalUrl)
-        .setFooter({ text: serviceName });
+        .setURL(data.originalUrl);
 
-    if (data.author.name) {
+    const authorText = limitText(
+        data.authorName || data.title || serviceName,
+        256
+    );
+
+    if (authorText) {
         embed.setAuthor({
-            name: limitText(data.author.name + (data.author.username ? ` ${data.author.username}` : ''), 256),
-            url: data.originalUrl
+            name: authorText,
+            url: data.originalUrl,
+            ...(data.authorImage ? { iconURL: data.authorImage } : {})
         });
-    } else if (data.title) {
-        embed.setTitle(limitText(data.title, 256));
     }
 
-    if (data.description) embed.setDescription(limitText(data.description, 4096));
-    if (data.image) embed.setImage(data.image);
+    if (data.username && data.username !== data.authorName) {
+        embed.setTitle(limitText(data.username, 256));
+    }
+
+    if (data.description) {
+        embed.setDescription(limitText(data.description, 4096));
+    } else if (data.title && !data.authorName) {
+        embed.setDescription(limitText(data.title, 4096));
+    }
+
+    if (data.image) {
+        embed.setImage(data.image);
+    }
+
+    if (data.publishedTime) {
+        embed.setTimestamp(data.publishedTime);
+    }
+
+    embed.setFooter({ text: serviceName });
 
     return embed;
 }
@@ -207,21 +330,37 @@ client.on('voiceStateUpdate', (oldState, newState) => {
     const dateStr = getDateStr();
     const channelName = newState.channel?.name || oldState.channel?.name || 'ไม่ทราบห้อง';
 
-    if (!oldState.channelId && newState.channelId) logChannel.send(`${dateStr} <@${member.id}> เข้า **${channelName}**`);
-    else if (oldState.channelId && !newState.channelId) logChannel.send(`${dateStr} <@${member.id}> ออก **${channelName}**`);
-    else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) logChannel.send(`${dateStr} <@${member.id}> ย้ายจาก **${oldState.channel.name}** ไป **${channelName}**`);
+    if (!oldState.channelId && newState.channelId) {
+        logChannel.send(`${dateStr} <@${member.id}> เข้า **${channelName}**`);
+    } else if (oldState.channelId && !newState.channelId) {
+        logChannel.send(`${dateStr} <@${member.id}> ออก **${channelName}**`);
+    } else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
+        logChannel.send(`${dateStr} <@${member.id}> ย้ายจาก **${oldState.channel.name}** ไป **${channelName}**`);
+    }
 
-    if (!oldState.selfMute && newState.selfMute) logChannel.send(`${dateStr} 🎙️ <@${member.id}> **ปิดไมค์**`);
-    else if (oldState.selfMute && !newState.selfMute) logChannel.send(`${dateStr} 🎙️ <@${member.id}> **เปิดไมค์**`);
+    if (!oldState.selfMute && newState.selfMute) {
+        logChannel.send(`${dateStr} 🎙️ <@${member.id}> **ปิดไมค์**`);
+    } else if (oldState.selfMute && !newState.selfMute) {
+        logChannel.send(`${dateStr} 🎙️ <@${member.id}> **เปิดไมค์**`);
+    }
 
-    if (!oldState.selfDeaf && newState.selfDeaf) logChannel.send(`${dateStr} 🔈 <@${member.id}> **ปิดหูฟัง/ลำโพง**`);
-    else if (oldState.selfDeaf && !newState.selfDeaf) logChannel.send(`${dateStr} 🔊 <@${member.id}> **เปิดหูฟัง/ลำโพง**`);
+    if (!oldState.selfDeaf && newState.selfDeaf) {
+        logChannel.send(`${dateStr} 🔈 <@${member.id}> **ปิดหูฟัง/ลำโพง**`);
+    } else if (oldState.selfDeaf && !newState.selfDeaf) {
+        logChannel.send(`${dateStr} 🔊 <@${member.id}> **เปิดหูฟัง/ลำโพง**`);
+    }
 
-    if (!oldState.selfVideo && newState.selfVideo) logChannel.send(`${dateStr} 📹 <@${member.id}> เริ่ม **เปิดกล้อง** ในห้อง **${channelName}**`);
-    else if (oldState.selfVideo && !newState.selfVideo) logChannel.send(`${dateStr} 📹 <@${member.id}> **ปิดกล้อง** ในห้อง **${channelName}**`);
+    if (!oldState.selfVideo && newState.selfVideo) {
+        logChannel.send(`${dateStr} 📹 <@${member.id}> เริ่ม **เปิดกล้อง** ในห้อง **${channelName}**`);
+    } else if (oldState.selfVideo && !newState.selfVideo) {
+        logChannel.send(`${dateStr} 📹 <@${member.id}> **ปิดกล้อง** ในห้อง **${channelName}**`);
+    }
 
-    if (!oldState.streaming && newState.streaming) logChannel.send(`${dateStr} 🛑 <@${member.id}> เริ่ม **สตรีมหน้าจอ** ในห้อง **${channelName}**`);
-    else if (oldState.streaming && !newState.streaming) logChannel.send(`${dateStr} 🛑 <@${member.id}> **หยุดสตรีมหน้าจอ** ในห้อง **${channelName}**`);
+    if (!oldState.streaming && newState.streaming) {
+        logChannel.send(`${dateStr} 🛑 <@${member.id}> เริ่ม **สตรีมหน้าจอ** ในห้อง **${channelName}**`);
+    } else if (oldState.streaming && !newState.streaming) {
+        logChannel.send(`${dateStr} 🛑 <@${member.id}> **หยุดสตรีมหน้าจอ** ในห้อง **${channelName}**`);
+    }
 });
 
 client.on('messageDelete', async message => {
@@ -235,12 +374,22 @@ client.on('messageDelete', async message => {
     let executorTag = `${authorTag} ลบเอง`;
 
     try {
-        const fetchedLogs = await message.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.MessageDelete });
+        const fetchedLogs = await message.guild.fetchAuditLogs({
+            limit: 1,
+            type: AuditLogEvent.MessageDelete
+        });
+
         const deletionLog = fetchedLogs.entries.first();
 
         if (deletionLog) {
             const { executor, target, createdTimestamp } = deletionLog;
-            if (message.author && target && target.id === message.author.id && createdTimestamp > Date.now() - 5000) {
+
+            if (
+                message.author &&
+                target &&
+                target.id === message.author.id &&
+                createdTimestamp > Date.now() - 5000
+            ) {
                 executorTag = `<@${executor.id}>`;
             }
         }
@@ -249,7 +398,10 @@ client.on('messageDelete', async message => {
     }
 
     let contentLog = `🗑️ ${dateStr} | ลบข้อความของ ${authorTag}\nคนลบ : ${executorTag} | ช่อง : <#${message.channel.id}>`;
-    if (message.content) contentLog += `\n"${message.content}"`;
+
+    if (message.content) {
+        contentLog += `\n"${message.content}"`;
+    }
 
     await logChannel.send(contentLog);
 
@@ -270,7 +422,8 @@ client.on('messageCreate', async message => {
 
         if (matches?.length) {
             const uniqueUrls = [...new Set(matches.map(cleanUrl))];
-            const metadataList = await Promise.all(uniqueUrls.map(fetchSocialMetadata));
+            const limitedUrls = uniqueUrls.slice(0, 5);
+            const metadataList = await Promise.all(limitedUrls.map(fetchSocialMetadata));
             const validMetadata = metadataList.filter(Boolean);
 
             if (validMetadata.length > 0) {
@@ -283,14 +436,18 @@ client.on('messageCreate', async message => {
                     });
 
                     setTimeout(() => {
-                        message.suppressEmbeds(true).catch(() => {});
-                    }, 1000);
+                        message.suppressEmbeds(true).catch(error => {
+                            console.log(`ซ่อน Embed ต้นฉบับไม่ได้: ${error.message}`);
+                        });
+                    }, 500);
                 } catch (error) {
-                    console.log(`ส่ง Embed ไม่สำเร็จ: ${error.message}`);
+                    console.log(`ส่ง Social Embed ไม่สำเร็จ: ${error.message}`);
                 }
 
                 return;
             }
+
+            console.log(`สร้าง Embed จากลิงก์ไม่ได้: ${uniqueUrls.join(', ')}`);
         }
     }
 
@@ -301,11 +458,18 @@ client.on('messageCreate', async message => {
     }
 
     const greetings = ['สวัสดีครับ', 'สวัสดีค่ะ', 'ดีครับ', 'ดีค่ะ', 'ดีจ้า', 'สวัสดีจ้า'];
-    if (greetings.some(word => content.includes(word))) return message.reply('โฮ่ง!');
 
-    if (content.includes('คิดถึงหมาคีตะ') || content.includes('คืดถึงหมาคีตะ')) return message.reply('แห่ะๆ');
-    else if (content.includes('คิดถึงคีตะ')) return message.reply('คิดถึงเหมือนกันครับ');
-    else if (content.includes('หมาคีตะ')) return message.reply('บ๊อกๆ');
+    if (greetings.some(word => content.includes(word))) {
+        return message.reply('โฮ่ง!');
+    }
+
+    if (content.includes('คิดถึงหมาคีตะ') || content.includes('คืดถึงหมาคีตะ')) {
+        return message.reply('แห่ะๆ');
+    } else if (content.includes('คิดถึงคีตะ')) {
+        return message.reply('คิดถึงเหมือนกันครับ');
+    } else if (content.includes('หมาคีตะ')) {
+        return message.reply('บ๊อกๆ');
+    }
 });
 
 client.on('messageUpdate', (oldMessage, newMessage) => {
