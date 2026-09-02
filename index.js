@@ -1016,7 +1016,7 @@ function setRandomStatus() {
 }
 
 /* ================================
-   Discord Error Logging
+   Discord Debug Logging
    ================================ */
 
 client.on('debug', info => {
@@ -1050,6 +1050,7 @@ client.once('ready', () => {
 });
 
 console.log('กำลังเริ่ม Discord login...');
+
 console.log(
     'DISCORD_TOKEN:',
     process.env.DISCORD_TOKEN
