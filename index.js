@@ -1023,4 +1023,6 @@ client.once('ready', () => {
     setInterval(setRandomStatus, SEVENTEEN_DAYS_MS);
 });
 
-client.login(process.env.MTUzNTY4NDQ0ODI3NDc1MTQ4OA.GKTat_.1BtzPEYuyis51vatiuP0I6xs_nOgMSxU8b2JMQ);
+client.login(process.env.DISCORD_TOKEN).catch(err => {
+  console.error('❌ Login Discord ไม่สำเร็จ:', err.message);
+});
