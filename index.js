@@ -1099,6 +1099,111 @@ client.once(
     }
 );
 
+async function testDiscordGateway() {
+    console.log('========================================');
+    console.log('🌐 ทดสอบ Discord Gateway โดยตรง...');
+
+    return new Promise(resolve => {
+        let finished = false;
+
+        const finish = (result) => {
+            if (finished) return;
+
+            finished = true;
+            resolve(result);
+        };
+
+        let ws;
+
+        try {
+            ws = new WebSocket(
+            'wss://gateway.discord.gg/?v=10&encoding=json'
+            );
+
+        console.log(
+            '[GATEWAY TEST] กำลังเปิด connection ไป Discord...'
+        );
+        } catch (error) {
+            console.error(
+                '[GATEWAY TEST] สร้าง WebSocket ไม่สำเร็จ:',
+                error.message
+            );
+
+            finish(false);
+            return;
+        }
+
+        const timeout = setTimeout(() => {
+            console.error(
+                '[GATEWAY TEST] ❌ Timeout 15 วินาที'
+            );
+
+            try {
+                ws.close();
+            } catch {}
+
+            finish(false);
+        }, 15000);
+
+        ws.addEventListener('open', () => {
+            console.log(
+                '[GATEWAY TEST] ✅ WebSocket OPEN'
+            );
+        });
+
+        ws.addEventListener('message', event => {
+            try {
+                const data =
+                    JSON.parse(
+                        String(event.data)
+                    );
+
+                console.log(
+                    `[GATEWAY TEST] ได้ข้อความจาก Discord opcode=${data.op}`
+                );
+
+                if (data.op === 10) {
+                    console.log(
+                        '[GATEWAY TEST] ✅ ได้ Hello จาก Discord Gateway'
+                    );
+
+                    clearTimeout(timeout);
+
+                    try {
+                        ws.close();
+                    } catch {}
+
+                    finish(true);
+                }
+            } catch (error) {
+                console.error(
+                    '[GATEWAY TEST] อ่านข้อความไม่ได้:',
+                    error.message
+                );
+            }
+        });
+
+        ws.addEventListener('error', error => {
+            console.error(
+                '[GATEWAY TEST] ❌ WebSocket ERROR',
+                error
+            );
+        });
+
+        ws.addEventListener('close', event => {
+            console.log(
+                `[GATEWAY TEST] WebSocket CLOSE code=${event.code} reason=${event.reason || 'ไม่มี reason'}`
+            );
+
+            clearTimeout(timeout);
+
+            // ถ้าได้ Hello แล้วถือว่าทดสอบผ่าน
+            if (finished) return;
+
+            finish(false);
+        });
+    });
+}
 /* =========================================================
    LOGIN
 ========================================================= */
@@ -1128,8 +1233,35 @@ async function startDiscord() {
         '----------------------------------------'
     );
 
+    const gatewayOK =
+        await testDiscordGateway();
+
     console.log(
-        'กำลังเชื่อม Discord Gateway...'
+        '----------------------------------------'
+    );
+
+    if (!gatewayOK) {
+        console.error(
+            '❌ Render เชื่อม Discord Gateway โดยตรงไม่สำเร็จ'
+        );
+
+        console.error(
+            'ยังไม่เริ่ม client.login() เพื่อไม่ให้เกิด restart loop'
+        );
+
+        return;
+    }
+
+    console.log(
+        '✅ Discord Gateway network test ผ่าน'
+    );
+
+    console.log(
+        '----------------------------------------'
+    );
+
+    console.log(
+        'กำลังเชื่อม Discord Gateway ด้วย discord.js...'
     );
 
     try {
@@ -1144,7 +1276,7 @@ async function startDiscord() {
                         () => {
                             reject(
                                 new Error(
-                                    'Discord Gateway timeout หลัง 30 วินาที'
+                                    'discord.js Gateway timeout หลัง 30 วินาที'
                                 )
                             );
                         },
@@ -1157,7 +1289,6 @@ async function startDiscord() {
         console.log(
             '✅ Discord login สำเร็จ'
         );
-
     } catch (error) {
         console.error(
             '❌ Discord Login Failed:',
@@ -1178,11 +1309,7 @@ async function startDiscord() {
             client.destroy();
         } catch {}
 
-        console.error(
-            '❌ ปิด process เพื่อให้ Render restart'
-        );
-
-        process.exit(1);
+        return;
     }
 }
 
