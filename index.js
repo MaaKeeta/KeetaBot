@@ -5,7 +5,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get('/', (req, res) => res.send('ระบบเก็บ Log 24 ชั่วโมงกำลังทำงาน!'));
-app.listen(PORT, () => console.log(Server is running on port ${PORT}));
+app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
 
 const client = new Client({
 intents: [
