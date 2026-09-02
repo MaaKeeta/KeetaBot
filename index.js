@@ -1015,12 +1015,34 @@ function setRandomStatus() {
     client.user.setPresence({ activities: [randomStatus] });
 }
 
+/* ================================
+   Discord Error Logging
+   ================================ */
+
+client.on('error', error => {
+    console.error('❌ Discord Client Error:', error);
+});
+
+client.on('warn', warning => {
+    console.warn('⚠️ Discord Warning:', warning);
+});
+
+client.on('shardError', error => {
+    console.error('❌ Discord Shard Error:', error);
+});
+
 client.once('ready', () => {
-    console.log(`บอท ${client.user.tag} ออนไลน์ (Render)`);
+    console.log(`✅ บอท ${client.user.tag} ออนไลน์ (Render)`);
     setRandomStatus();
 
     const SEVENTEEN_DAYS_MS = 17 * 24 * 60 * 60 * 1000;
     setInterval(setRandomStatus, SEVENTEEN_DAYS_MS);
 });
 
-client.login(process.env.DISCORD_TOKEN);
+client.login(process.env.DISCORD_TOKEN)
+    .then(() => {
+        console.log('✅ Discord login เริ่มต้นสำเร็จ');
+    })
+    .catch(error => {
+        console.error('❌ Discord Login Failed:', error);
+    });
