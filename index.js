@@ -1035,6 +1035,16 @@ client.on('shardError', error => {
     console.error('[SHARD ERROR]', error);
 });
 
+client.on('shardDisconnect', (event, id) => {
+    console.error(
+        `[SHARD DISCONNECT] shard=${id} code=${event?.code} reason=${event?.reason || 'ไม่มี reason'}`
+    );
+});
+
+client.on('shardReconnecting', id => {
+    console.log(`[SHARD RECONNECTING] ${id}`);
+});
+
 client.on('shardReady', id => {
     console.log(`[SHARD READY] ${id}`);
 });
@@ -1058,7 +1068,7 @@ console.log(
         : '❌ ไม่มีค่า'
 );
 
-client.login(process.env.DISCORD_TOKEN)
+const loginPromise = client.login(process.env.DISCORD_TOKEN)
     .then(() => {
         console.log('✅ Discord login สำเร็จ');
     })
@@ -1066,3 +1076,10 @@ client.login(process.env.DISCORD_TOKEN)
         console.error('❌ Discord Login Failed');
         console.error(error);
     });
+
+setTimeout(() => {
+    if (!client.isReady()) {
+        console.error('⏰ Discord login เกิน 30 วินาที แต่ยังไม่ READY');
+        console.error('สถานะ client:', client.ws.status);
+    }
+}, 30000);
